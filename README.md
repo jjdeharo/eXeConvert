@@ -25,6 +25,12 @@ npm run dev
 
 La aplicación queda disponible en `http://localhost:3007`.
 
+## Publicación en GitHub Pages
+
+- La app compilada se genera en `docs/`.
+- La raíz del repositorio contiene una redirección automática a `./docs/`.
+- Tras cada cambio, hay que ejecutar `npm run build` y subir también el contenido de `docs/`.
+
 ## Arquitectura
 
 - `src/converter.ts`: parser del `.elpx`, normalización HTML y generación del `.docx`.
