@@ -142,7 +142,9 @@ export async function convertElpxToDocx(
 
   onProgress?.({ phase: 'docx', message: 'Generando el documento .docx...' });
   const blob = await buildCompatibleDocx(html);
-  const previewHtml = await buildDocxPreviewHtml(blob, scopedProject.title, scopedProject.language);
+  const previewHtml = containsLatex(html)
+    ? buildMathEnabledSourcePreviewHtml(html, scopedProject.title, scopedProject.language)
+    : await buildDocxPreviewHtml(blob, scopedProject.title, scopedProject.language);
 
   return {
     blob,
@@ -252,6 +254,53 @@ async function buildDocxPreviewHtml(blob: Blob, title: string, language: string)
   }
 }
 
+function buildMathEnabledSourcePreviewHtml(htmlDocument: string, title: string, language: string): string {
+  const parsed = new DOMParser().parseFromString(htmlDocument, 'text/html');
+  const bodyHtml = parsed.body?.innerHTML || '<p>Sin contenido para previsualizar.</p>';
+
+  return `<!doctype html>
+<html lang="${escapeAttribute(language || 'es')}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title || 'Vista previa DOCX')}</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #f5f5f5; }
+    body { font-family: Georgia, "Times New Roman", serif; color: #222; line-height: 1.45; }
+    .docx-preview {
+      box-sizing: border-box;
+      width: min(900px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+      background: #fff;
+      column-count: 1 !important;
+      column-gap: 0 !important;
+    }
+    .docx-preview * { box-sizing: border-box; max-width: 100%; }
+    .docx-preview table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
+    .docx-preview td, .docx-preview th { border: 1px solid #c8c8c8; padding: 6px; vertical-align: top; }
+    .docx-preview img { height: auto; }
+  </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\\\(', '\\\\)'], ['$', '$']],
+        displayMath: [['\\\\[', '\\\\]'], ['$$', '$$']],
+        processEscapes: true
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+</head>
+<body>
+  <main class="docx-preview">
+    ${bodyHtml}
+  </main>
+</body>
+</html>`;
+}
+
 function parseProject(entries: Record<string, Uint8Array>): ParsedProject {
   const contentEntry = entries['content.xml'];
   if (!contentEntry) {
@@ -330,7 +379,9 @@ async function buildHtmlDocument(
   const sections = scopedProject.pages
     .map(page => {
       const sourceIndex = sourceIndexById.get(page.id);
-      const sourceHtml = typeof sourceIndex === 'number' ? (exportedPages?.[sourceIndex] || page.contentHtml) : page.contentHtml;
+      const originalHtml = page.contentHtml || '';
+      const renderedHtml = typeof sourceIndex === 'number' ? (exportedPages?.[sourceIndex] || '') : '';
+      const sourceHtml = shouldPreferOriginalMathSource(originalHtml) ? originalHtml : renderedHtml || originalHtml;
       const content = sanitizeHtmlFragment(sourceHtml, assets, page.depth);
       if (!content.trim()) {
         return '';
@@ -374,6 +425,17 @@ ${content}
   ${sections || '<p>El proyecto no contiene contenido exportable.</p>'}
 </body>
 </html>`;
+}
+
+function shouldPreferOriginalMathSource(html: string): boolean {
+  if (!html.trim()) {
+    return false;
+  }
+
+  return (
+    /\\\(|\\\[|\$\$|\$[^$\s]/.test(html) ||
+    /\\begin\{(?:equation\*?|align\*?|aligned|gather\*?|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix)\}/i.test(html)
+  );
 }
 
 function scopeProjectToSelection(project: ParsedProject, selectedPageIds?: string[]): ParsedProject {
@@ -1567,6 +1629,7 @@ function sanitizeLatexMathExpression(expression: string): string {
   return expression
     .replace(/\\label\{[^}]*\}/g, ' ')
     .replace(/\\nonumber\b/g, ' ')
+    .replace(/(^|[^\\])ext\{/g, '$1\\text{')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -1836,6 +1899,7 @@ class LatexMathParser {
     }
 
     if (command === 'left' || command === 'right') {
+      this.skipWhitespace();
       const delimiter = this.parsePrimary();
       return delimiter;
     }
@@ -2249,7 +2313,21 @@ function splitLatexTopLevel(source: string, separator: string): string[] {
   return parts;
 }
 
-const MATRIX_ENVIRONMENTS = new Set(['array', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix']);
+const MATRIX_ENVIRONMENTS = new Set([
+  'array',
+  'matrix',
+  'pmatrix',
+  'bmatrix',
+  'Bmatrix',
+  'vmatrix',
+  'Vmatrix',
+  'aligned',
+  'align',
+  'align*',
+  'cases',
+  'gathered',
+  'split',
+]);
 
 const LATEX_GREEK_SYMBOLS: Record<string, string> = {
   alpha: 'α',

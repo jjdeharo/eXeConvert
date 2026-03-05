@@ -53,6 +53,15 @@ if (!app) {
   throw new Error('No se ha encontrado el contenedor principal.');
 }
 
+const materialSymbolsHref =
+  'https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,500,0,0';
+if (!document.querySelector(`link[href="${materialSymbolsHref}"]`)) {
+  const materialSymbolsLink = document.createElement('link');
+  materialSymbolsLink.rel = 'stylesheet';
+  materialSymbolsLink.href = materialSymbolsHref;
+  document.head.append(materialSymbolsLink);
+}
+
 app.innerHTML = `
   <main class="shell">
     <section class="hero" aria-label="Cabecera de la aplicación">
@@ -79,7 +88,10 @@ app.innerHTML = `
             Archivos compatibles: <code>.elpx</code>, <code>.docx</code> y <code>.md</code>.
           </p>
           <div class="dropzone-actions">
-            <button id="pick-button" type="button">Abrir archivo</button>
+            <button id="pick-button" type="button">
+              <span class="material-symbols-rounded" aria-hidden="true">upload_file</span>
+              <span class="btn-label">Abrir archivo</span>
+            </button>
             <span id="file-name" class="picked-file">Ningún archivo seleccionado.</span>
           </div>
         </div>
@@ -106,8 +118,14 @@ app.innerHTML = `
         <div id="page-selection-field" class="field" hidden>
           <span>Páginas a exportar</span>
           <div class="page-selection-actions">
-            <button id="pages-all" type="button" class="ghost-button">Todas</button>
-            <button id="pages-none" type="button" class="ghost-button">Ninguna</button>
+            <button id="pages-all" type="button" class="ghost-button">
+              <span class="material-symbols-rounded" aria-hidden="true">done_all</span>
+              <span class="btn-label">Todas</span>
+            </button>
+            <button id="pages-none" type="button" class="ghost-button">
+              <span class="material-symbols-rounded" aria-hidden="true">remove_done</span>
+              <span class="btn-label">Ninguna</span>
+            </button>
           </div>
           <div id="page-selection-list" class="page-selection-list"></div>
           <p id="page-selection-help" class="field-help">
@@ -173,8 +191,14 @@ app.innerHTML = `
         </div>
 
         <div class="actions">
-          <button id="preview-button" type="button" disabled>Previsualizar</button>
-          <button id="submit-button" type="submit" disabled hidden>Guardar archivo</button>
+          <button id="preview-button" type="button" disabled hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">preview</span>
+            <span class="btn-label">Previsualizar</span>
+          </button>
+          <button id="submit-button" type="submit" disabled hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">save</span>
+            <span class="btn-label">Guardar archivo</span>
+          </button>
         </div>
       </form>
 
@@ -193,7 +217,10 @@ app.innerHTML = `
       <div id="preview-field" class="field preview-field" hidden>
         <div class="preview-heading">
           <span>Vista previa</span>
-          <button id="preview-popout-button" type="button" class="ghost-button" hidden>Abrir en ventana</button>
+          <button id="preview-popout-button" type="button" class="ghost-button" hidden>
+            <span class="material-symbols-rounded" aria-hidden="true">open_in_new</span>
+            <span class="btn-label">Abrir en ventana</span>
+          </button>
         </div>
         <p class="field-help">Revisa el resultado antes de guardar. Si cambias opciones o páginas, vuelve a previsualizar.</p>
         <iframe id="preview-frame" class="preview-frame" title="Vista previa del resultado"></iframe>
@@ -203,7 +230,7 @@ app.innerHTML = `
 
     <footer class="app-footer">
       <p class="app-footer-meta">
-        Versión beta · v0.1.0-beta.1 · ©
+        Versión beta · v0.1.0-beta.2 · ©
         <a href="https://bilateria.org" target="_blank" rel="noopener noreferrer">Juan José de Haro</a>
         ·
         <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">Licencia AGPLv3</a>
@@ -608,8 +635,8 @@ function setStatus(message: string, isError = false): void {
 function setBusyState(isBusy: boolean): void {
   previewButton.classList.toggle('is-loading', isBusy);
   submitButton.classList.toggle('is-loading', isBusy);
-  previewButton.textContent = isBusy ? 'Trabajando...' : idlePreviewLabel;
-  submitButton.textContent = isBusy ? 'Trabajando...' : idleSaveLabel;
+  setButtonLabel(previewButton, isBusy ? 'Trabajando...' : idlePreviewLabel);
+  setButtonLabel(submitButton, isBusy ? 'Trabajando...' : idleSaveLabel);
   previewButton.disabled = isBusy;
   submitButton.disabled = isBusy;
   statusSpinner.hidden = !isBusy;
@@ -620,6 +647,15 @@ function setBusyState(isBusy: boolean): void {
   } else {
     setProgress(0);
   }
+}
+
+function setButtonLabel(button: HTMLButtonElement, label: string): void {
+  const labelNode = button.querySelector<HTMLElement>('.btn-label');
+  if (labelNode) {
+    labelNode.textContent = label;
+    return;
+  }
+  button.textContent = label;
 }
 
 function updateProgress(progress: ConvertProgress | DocxImportProgress): void {
@@ -707,6 +743,7 @@ function toOutputFilename(inputFilename: string, extension: '.docx' | '.elpx' | 
 
 function syncActionButtons(): void {
   const hasFile = selectedFile !== null && selectedKind !== null;
+  previewButton.hidden = !hasFile;
   previewButton.disabled = !hasFile;
   const currentSignature = computeConversionSignature();
   const canSave = Boolean(hasFile && preparedConversion && preparedConversion.signature === currentSignature);
