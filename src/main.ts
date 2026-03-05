@@ -66,7 +66,9 @@ app.innerHTML = `
   <main class="shell">
     <section class="hero" aria-label="Cabecera de la aplicación">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">eXe</span>
+        <span class="brand-mark" aria-hidden="true">
+          <img src="./favicon.svg" alt="" />
+        </span>
         <div class="brand-copy">
           <h1>eXeConvert</h1>
           <p class="subtitle">Conversor para eXeLearning</p>

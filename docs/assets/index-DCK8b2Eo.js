@@ -978,7 +978,9 @@ l0,-`+(m+144)+`c-2,-159.3,-10,-310.7,-24,-454c-53.3,-528,-210,-949.7,
   <main class="shell">
     <section class="hero" aria-label="Cabecera de la aplicación">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">eXe</span>
+        <span class="brand-mark" aria-hidden="true">
+          <img src="./favicon.svg" alt="" />
+        </span>
         <div class="brand-copy">
           <h1>eXeConvert</h1>
           <p class="subtitle">Conversor para eXeLearning</p>
