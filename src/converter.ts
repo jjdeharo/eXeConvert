@@ -381,7 +381,7 @@ async function buildHtmlDocument(
       const sourceIndex = sourceIndexById.get(page.id);
       const originalHtml = page.contentHtml || '';
       const renderedHtml = typeof sourceIndex === 'number' ? (exportedPages?.[sourceIndex] || '') : '';
-      const sourceHtml = shouldPreferOriginalMathSource(originalHtml) ? originalHtml : renderedHtml || originalHtml;
+      const sourceHtml = choosePreferredPageSource(originalHtml, renderedHtml);
       const content = sanitizeHtmlFragment(sourceHtml, assets, page.depth);
       if (!content.trim()) {
         return '';
@@ -415,7 +415,6 @@ ${content}
     table { border-collapse: collapse; width: 100%; margin: 10pt 0; }
     td, th { border: 1pt solid #bfb7a8; padding: 4pt 6pt; vertical-align: top; }
     .project-subtitle { color: #5a544a; margin: 0 0 14pt; }
-    .feedback, .js-feedback, .feedbackjs { display: block !important; visibility: visible !important; }
     .sr-av, .js-hidden, .screen-reader-text { display: none !important; }
   </style>
 </head>
@@ -427,15 +426,53 @@ ${content}
 </html>`;
 }
 
-function shouldPreferOriginalMathSource(html: string): boolean {
+function choosePreferredPageSource(originalHtml: string, renderedHtml: string): string {
+  if (hasMeaningfulPageSource(originalHtml)) {
+    return originalHtml;
+  }
+
+  if (hasMeaningfulPageSource(renderedHtml)) {
+    return renderedHtml;
+  }
+
+  return originalHtml || renderedHtml;
+}
+
+function hasMeaningfulPageSource(html: string): boolean {
   if (!html.trim()) {
     return false;
   }
 
-  return (
+  if (
     /\\\(|\\\[|\$\$|\$[^$\s]/.test(html) ||
     /\\begin\{(?:equation\*?|align\*?|aligned|gather\*?|array|matrix|pmatrix|bmatrix|vmatrix|Vmatrix)\}/i.test(html)
-  );
+  ) {
+    return true;
+  }
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  for (const removable of Array.from(template.content.querySelectorAll('script, style, noscript, iframe, object, embed'))) {
+    removable.remove();
+  }
+
+  for (const hidden of Array.from(template.content.querySelectorAll<HTMLElement>('*'))) {
+    if (shouldDropHiddenElement(hidden)) {
+      hidden.remove();
+    }
+  }
+
+  if (
+    template.content.querySelector(
+      'img, svg, table, math, mjx-container, figure, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6, pre',
+    )
+  ) {
+    return true;
+  }
+
+  const text = normalizeWhitespace(template.content.textContent || '');
+  return text.length >= 24;
 }
 
 function scopeProjectToSelection(project: ParsedProject, selectedPageIds?: string[]): ParsedProject {
@@ -1075,6 +1112,19 @@ function convertBlockNode(
     ];
   }
 
+  if (isCaptionLikeContainer(node, tag)) {
+    const children = inlineChildrenFromNode(node);
+    if (children.length === 0) {
+      return [];
+    }
+    return [
+      new Paragraph({
+        children,
+        spacing: { after: 120 },
+      }),
+    ];
+  }
+
   if (isStructuralBlockContainer(tag)) {
     const nestedBlocks: Array<Paragraph | Table> = [];
     let orderedListIndex = 1;
@@ -1154,6 +1204,15 @@ function convertBlockNode(
 
 function isStructuralBlockContainer(tag: string): boolean {
   return ['div', 'article', 'main', 'header', 'footer', 'dd'].includes(tag);
+}
+
+function isCaptionLikeContainer(node: HTMLElement, tag: string): boolean {
+  if (tag === 'figcaption' || tag === 'caption') {
+    return true;
+  }
+
+  const className = (node.getAttribute('class') || '').toLowerCase();
+  return /\bfigcaption\b/.test(className);
 }
 
 function containsExplicitLineBreak(node: HTMLElement): boolean {
@@ -2453,6 +2512,12 @@ function sanitizeHtmlFragment(sourceHtml: string, assets: Map<string, AssetEntry
     removable.remove();
   }
 
+  for (const hidden of Array.from(template.content.querySelectorAll<HTMLElement>('*'))) {
+    if (shouldDropHiddenElement(hidden)) {
+      hidden.remove();
+    }
+  }
+
   for (const candidate of Array.from(template.content.querySelectorAll<HTMLElement>('div, img, a, p'))) {
     if (shouldRemovePrintExtraElement(candidate)) {
       candidate.remove();
@@ -2463,15 +2528,17 @@ function sanitizeHtmlFragment(sourceHtml: string, assets: Map<string, AssetEntry
     details.setAttribute('open', 'open');
   }
 
-  for (const feedback of Array.from(template.content.querySelectorAll('.feedback, .js-feedback, .feedbackjs'))) {
-    feedback.removeAttribute('hidden');
-    feedback.setAttribute('style', 'display:block; visibility:visible;');
-  }
-
   for (const anchor of Array.from(template.content.querySelectorAll('a'))) {
     const href = anchor.getAttribute('href') || '';
+    const normalizedHref = href.trim().toLowerCase();
     if (href.startsWith('asset://')) {
       anchor.replaceWith(document.createTextNode(anchor.textContent || anchor.getAttribute('download') || 'Adjunto'));
+      continue;
+    }
+
+    if (normalizedHref.startsWith('data:')) {
+      const label = anchor.textContent?.trim() || anchor.getAttribute('download') || 'Adjunto';
+      anchor.replaceWith(document.createTextNode(label));
       continue;
     }
 
@@ -2536,6 +2603,29 @@ function sanitizeHtmlFragment(sourceHtml: string, assets: Map<string, AssetEntry
   return template.innerHTML.trim();
 }
 
+function shouldDropHiddenElement(element: HTMLElement): boolean {
+  if (element.hasAttribute('hidden')) {
+    return true;
+  }
+
+  const ariaHidden = (element.getAttribute('aria-hidden') || '').trim().toLowerCase();
+  if (ariaHidden === 'true') {
+    return true;
+  }
+
+  const style = (element.getAttribute('style') || '').toLowerCase();
+  if (/display\s*:\s*none/.test(style) || /visibility\s*:\s*hidden/.test(style)) {
+    return true;
+  }
+
+  const className = (element.getAttribute('class') || '').toLowerCase();
+  if (!className) {
+    return false;
+  }
+
+  return /\b(js-hidden|sr-av|screen-reader-text|visually-hidden)\b/.test(className);
+}
+
 function flattenFxBlocks(root: DocumentFragment): void {
   for (const fxBlock of Array.from(root.querySelectorAll<HTMLElement>('.exe-fx'))) {
     const fragment = document.createDocumentFragment();
@@ -2597,7 +2687,9 @@ function describeOmittedMedia(source: string): string {
 }
 
 function sanitizeEmbeddedDataText(value: string): string {
-  return value.replace(/data:(?:audio|video)\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]{120,}/gi, '[Recurso multimedia embebido omitido]');
+  return value
+    .replace(/data:(?:audio|video)\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]{120,}/gi, '[Recurso multimedia embebido omitido]')
+    .replace(/data:application\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]{120,}/gi, '[Adjunto embebido omitido]');
 }
 
 function shouldRemovePrintExtraElement(element: HTMLElement): boolean {

@@ -240,7 +240,7 @@ app.innerHTML = `
 
     <footer class="app-footer">
       <p class="app-footer-meta">
-        Versión beta · v0.1.0-beta.3 · ©
+        Versión beta · v0.1.0-beta.4 · ©
         <a href="https://bilateria.org" target="_blank" rel="noopener noreferrer">Juan José de Haro</a>
         ·
         <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener noreferrer">Licencia AGPLv3</a>

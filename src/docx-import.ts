@@ -58,7 +58,7 @@ interface PreviewPageInfo {
   parentIndex: number | null;
 }
 
-const EXECONVERT_SIGNATURE = 'eXeConvert v0.1.0-beta.3';
+const EXECONVERT_SIGNATURE = 'eXeConvert v0.1.0-beta.4';
 
 export async function convertDocxToElpx(
   file: File,
