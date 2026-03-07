@@ -1,5 +1,14 @@
 # eXeConvert
 
+Este repositorio se ha trasladado a:
+
+https://github.com/eXeConvert/eXeConvert.github.io
+
+Sitio web actual:
+https://execonvert.github.io/
+
+Este repositorio antiguo se mantiene solo para redirigir la URL anterior de GitHub Pages.
+
 Conversor estático en navegador para transformar proyectos `.elpx` de eXeLearning 4 en `.docx`.
 
 ## Qué hace ahora
